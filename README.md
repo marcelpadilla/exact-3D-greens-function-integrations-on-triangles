@@ -1,1 +1,1 @@
-# exact-3D-greens-function-integration-on-triangles
+# Exact 3D Greens Function Integrations on Triangles
