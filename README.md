@@ -9,6 +9,7 @@
 - [Demo](#demo)
 - [Results](#results)
 - [Discussion](#discussion)
+- [Acknowledgement](#acknowledgement)
 - [Citation](#citation)
 - [License](#license)
 
@@ -87,11 +88,20 @@ Running the code will show you the following results:
 *Figure 7: Integration results for a line through a triangle vertex (the first one, where h=1). There is a singularity.*
 
 ## Discussion
-The analtic integration results are robust to the many possible cases and return the same result as the numerical integration based on scipy's dblquad. Away from singularities the analytic integration is around 10e5 times faster, while at singularities this reaches 10e6 speed-up using the default settings of dblquad.
+The analtic integration results are robust to the many possible cases and return the same result as the numerical integration based on scipy's dblquad. Away from singularities the analytic integration is around 10e5 times faster, while closer to the singularities this reaches 10e6 speed-up using the default settings of dblquad.
 
 However, the singularity at the tangential component when integrating $\nabla G(x,y)$ when $x \in \partial T$ seems to be unresolvable. Luckily, the normal gradient $\partial_n G(x,y)$ does not have this problem.
+The main problem is that the values of *f2* in the code become ill defined. At the tangential singularities they are set to zero, which is useful when having
+two triangle in the same plane next to each other, where these singularities would cancel out.
 
 This code was created for dealing with boundary integral equations.
+
+It is straight forward to apply this code to flat polygons for the integrations not involving *h(x)*. For *h(x)* integrations the flat polygon must be split into triangles.
+
+## Acknowledgement
+
+I thank Fabio Freschi for having uploaded a limited (without *h(x)*) matlab implementation that helped me get started.
+int_green3d (https://www.mathworks.com/matlabcentral/fileexchange/47782-int_green3d), MATLAB Central File Exchange. Retrieved February 5, 2025.
 
 ## Citation
 
