@@ -53,6 +53,9 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from scipy.integrate import dblquad
 
+# import the main function and a helper
+import greens_triangle_integration
+
 # -----------------------------------------------------------------------------
 ### Settings ###
 line_resolution = 51
@@ -93,7 +96,7 @@ def main():
     n_evaluation_points = line_resolution + (1-line_resolution % 2) # make sure it is odd
     evaluation_cases = []; evaluation_lines = []
     running_parameter = np.linspace(-1, 1, n_evaluation_points)*.5
-    triangle_normal = get_normal_from_triangle(triangle)
+    triangle_normal = greens_triangle_integration.get_normal_from_triangle(triangle)
     evaluation_base_line = np.outer(running_parameter, triangle_normal)
     triangle_corner = triangle[0]
     triangle_edge_1 = triangle[1]-triangle[0]
@@ -151,186 +154,25 @@ def main():
         print("\nEvaluating "+ evaluation_case)
         
         # analytic integration
-        I, I_linear, I_grad, I_grad_linear, I_n_grad, I_n_grad_linear, end_time_analytic = greens_analytic_integration(evaluation_line, triangle)
-
+        print("Analytic  integration...", end=''); start_time = time.perf_counter()
+        
+        # compute values of interest
+        values_of_interest = ['G', 'h_G', 'n_grad_G', 'h_n_grad_G', 'grad_G', 'h_grad_G']
+        integration_results = greens_triangle_integration.integrate(evaluation_line, triangle, values_of_interest)
+        Int_G, Int_h_G, Int_n_grad_G, Int_h_n_grad_G, Int_grad_G, Int_h_grad_G = [integration_results[key] for key in values_of_interest]
+        
+        run_time_analytic = time.perf_counter() - start_time; print(f" {run_time_analytic:.2e} seconds")
+        
         # numerical integration
-        I_num, I_num_linear, I_num_grad, I_num_grad_linear, I_num_n_grad, I_num_n_grad_linear, end_time_numerical = greens_numeric_integration(evaluation_line, triangle)
+        Int_num_G, Int_num_h_G, Int_num_n_grad_G, I_num_h_n_grad_G, Int_num_grad_G, Int_num_h_grad_G, run_time_numerical = greens_numeric_integration(evaluation_line, triangle)
         
         # Analyze results
-        results_analytical = [I, I_linear, I_grad, I_grad_linear, I_n_grad, I_n_grad_linear, end_time_analytic]
-        results_numerical = [I_num, I_num_linear, I_num_grad, I_num_grad_linear, I_num_n_grad, I_num_n_grad_linear, end_time_numerical]
+        results_analytical = [Int_G, Int_h_G, Int_grad_G, Int_h_grad_G, Int_n_grad_G, Int_h_n_grad_G, run_time_analytic]
+        results_numerical = [Int_num_G, Int_num_h_G, Int_num_n_grad_G, I_num_h_n_grad_G, Int_num_grad_G, Int_num_h_grad_G, run_time_numerical]
         analyze_results(results_analytical, results_numerical, evaluation_line, triangle, running_parameter, evaluation_case)
         
 
     print("\n 🚩 End 🚩 \n")
-
-
-# -----------------------------------------------------------------------------
-# Analytic integrator
-# -----------------------------------------------------------------------------
-
-def greens_analytic_integration(P_observer, P_triangle):
-    """
-    Integrates '1/r' and 'grad(1/r)' over a single plane triangle in 3D.
-
-    Returns
-    -------
-    I1 : ndarray of shape (nfp,)
-        Integral of 1/r over the triangle for each field point.
-    Igrad : ndarray of shape (nfp, 3)
-        Integral of grad(1/r) over the triangle for each field point.
-    """
-    start_time = time.perf_counter()
-    print("Analytic  integration...", end='')
-    
-    nr_observation_points = P_observer.shape[0]
-
-    # remap origin
-    P_observer = P_observer - P_triangle[0]
-    P_triangle = P_triangle - P_triangle[0]
-
-    # Lengths and edge tangent vectors
-    s = np.array([
-        P_triangle[2] - P_triangle[1],
-        P_triangle[0] - P_triangle[2],
-        P_triangle[1] - P_triangle[0]
-    ])
-    l1, l2, l3 = np.linalg.norm(s, axis=1)
-    s = normalize_rows(s)
-
-    # normal and edge normals
-    normal = get_normal_from_triangle(P_triangle)
-    m = np.array([
-        np.cross(s[0], normal),
-        np.cross(s[1], normal),
-        np.cross(s[2], normal)
-    ])
-    
-    # triangle frame basis vectors
-    u_unit = s[2]
-    v_unit = -m[2]
-    w_unit = normal
-
-    # evaluation points coordinates in triangle frame
-    u0 = np.dot( P_observer, u_unit )
-    v0 = np.dot( P_observer, v_unit )
-    w0 = np.dot( P_observer, w_unit )
-    
-    # parametrization of linear map
-    u3 = np.dot( P_triangle[2] , u_unit )
-    v3 = np.dot( P_triangle[2] , v_unit )
-    form = np.array([
-        [1, -1/l3, ( (u3 / l3) - 1 )/v3],
-        [0,  1/l3, -u3 / ( l3*v3 )],
-        [0,  0,  1]
-    ])
-    N10, N20, N30 = form @ [np.ones_like(u0), u0, v0]
-    
-    # Project observation points to the plane of the triangel
-    P_plane = P_observer - np.dot( P_observer, w_unit )[:, np.newaxis] * w_unit
-    
-    # Project observation points to the edges of the triangle
-    P_edge = np.zeros((nr_observation_points, 3, 3))
-    for i in range(3):
-        P_edge[:, i, :] = P_triangle[(i + 1) % 3] + s[i] * np.dot(P_observer - P_triangle[(i + 1) % 3], s[i])[:, np.newaxis]
-    
-
-    # parametrizations of integration
-    splus = np.zeros((nr_observation_points, 3))
-    sminus = np.zeros((nr_observation_points, 3))
-    timer_start = np.zeros((nr_observation_points, 3))
-    for i in range(3):
-        splus[:, i] = np.dot( P_triangle[(i + 2) % 3] - P_edge[:, i, :] , s[i])
-        sminus[:, i] = np.dot( P_triangle[(i + 1) % 3] - P_edge[:, i, :] , s[i])
-        timer_start[:, i] = np.dot( P_edge[:, i, :] - P_plane , m[i])
-    
-    # distances
-    R0 = np.linalg.norm(P_observer[:, np.newaxis, :] - P_edge, axis=2)
-    Rplus = np.linalg.norm(P_observer[:, np.newaxis, :] - P_triangle[np.array([2, 0, 1])], axis=2)
-    Rminus = np.linalg.norm(P_observer[:, np.newaxis, :] - P_triangle[np.array([1, 2, 0])], axis=2)
-    
-    # apply in plane treshhold 
-    threshhold = accuracy_treshold * min([l1, l2, l3])
-    timer_start[np.abs(timer_start) < threshhold] = 0.0
-    w0[np.abs(w0) < threshhold] = 0.0
-    R0[np.abs(R0) < threshhold] = 0.0
-    w0_tile = np.tile(w0, (3,1)).T
-
-    # side functions
-    with np.errstate(divide='ignore', invalid='ignore'):
-        f2 = np.log((Rplus + splus) / (Rminus + sminus))
-        # the following line addresses a singularity issue on the extended edge of a triangle (a 0/0 error)
-        f2 = np.where( (np.isnan(f2)) | (f2 < 0), np.log((Rminus - sminus) / (Rplus - splus)), f2)
-        # next we acknowledge that on the triangle boundary we have an unresolved singularity that we simply remove.
-        # It is only noticible in the tangential gradient.
-        f2 = np.where( (np.isnan(f2)) | np.isinf(f2), 0, f2)
-    f3 = (splus * Rplus - sminus * Rminus) + R0**2 * f2
-    with np.errstate(divide='ignore', invalid='ignore'):
-        betas = (np.arctan(timer_start * splus / (R0**2 + np.abs(w0_tile) * Rplus))
-                - np.arctan(timer_start * sminus / (R0**2 + np.abs(w0_tile) * Rminus)))
-        betas = np.where( R0 < threshhold, 0, betas)
-        beta = np.sum( betas, axis=1 )
-    
-    # Basic integral of Green's function G
-    
-    # eq. (19): integral of 1/r
-    I_const = np.sum(timer_start*f2 , axis=1) - np.abs(w0)*beta
-
-    # eq. (20): integral of u or v times (1/r)
-    sum_vector = 0.5 * f3 @ m
-    Iua = np.dot( sum_vector , u_unit  )
-    Iva = np.dot( sum_vector , v_unit  )
-
-    # eq. (24): integral of linear map times (1/r)
-    Iu = u0 * I_const + Iua
-    Iv = v0 * I_const + Iva 
-    # compute for the 3 linear basis functions on the triangle
-    I0_linear, I1_linear, I2_linear = form @ [I_const, Iu, Iv]
-    
-    # Integral of the gradient of the Green's function G
-    
-    # eq. (34): integral of grad(1/r)
-    Igrad = - f2 @ m - np.sign(w0)[:, np.newaxis] * beta[:, np.newaxis] * w_unit
-
-    # eq. (36): integrals of u or v times grad(1/r)
-    part1u = (w0 * np.dot((f2 @ m), u_unit))[:, None] * w_unit
-    part1v = (w0 * np.dot((f2 @ m), v_unit))[:, None] * w_unit
-    part2u = (-np.abs(w0) * beta)[:, None] * u_unit
-    part2v = (-np.abs(w0) * beta)[:, None] * v_unit
-    u_dot_s = np.sum(u_unit * s, axis=1)
-    v_dot_s = np.sum(v_unit * s, axis=1)
-    f = ( (f2 * timer_start)[:, :, None] * s[None, :, :]) - ((Rplus - Rminus)[:, :, None] * m[None, :, :])
-    part3u = (f * u_dot_s[None, :, None]).sum(axis=1)
-    part3v = (f * v_dot_s[None, :, None]).sum(axis=1)
-    Igradua = part1u + part2u + part3u
-    Igradva = part1v + part2v + part3v
-    
-    # eq. (40): integral of linear map times grad(1/r)
-    Igradu = u0[:,np.newaxis] * Igrad + Igradua
-    Igradv = v0[:,np.newaxis] * Igrad + Igradva
-    # compute for the 3 linear basis functions on the triangle
-    I0grad_linear = np.tensordot(form[0], [Igrad, Igradu, Igradv], axes=1)    
-    I1grad_linear = np.tensordot(form[1], [Igrad, Igradu, Igradv], axes=1)
-    I2grad_linear = np.tensordot(form[2], [Igrad, Igradu, Igradv], axes=1)
-
-    # Integral of the normal gradient of the Green's function G
-
-    # eq. (34): integral of <n , grad(1/r) >
-    I_n_grad = -np.sign(w0) * beta
-    
-    # eq. (40): integrals of linear map times <n , grad(1/r) >
-    I_n_grad_linear = form[0] @ [
-        (-np.sign(w0) * beta * N10),
-        (w0 * np.dot(f2 @ m, u_unit)),
-        (w0 * np.dot(f2 @ m, v_unit))
-    ]
-
-    # time
-    time_passed = time.perf_counter() - start_time
-    print(f" {time_passed:.2e} seconds")
-
-    # final return
-    return I_const, I0_linear, Igrad, I0grad_linear, I_n_grad, I_n_grad_linear, time_passed
 
 # -----------------------------------------------------------------------------
 # Numerical integration
@@ -603,7 +445,7 @@ def greens_numeric_integration_n_grad_G(evaluation_points,triangle):
     Jac = np.linalg.norm(np.cross(v1, v2))
 
     # Get the normal vector of the triangle
-    normal = get_normal_from_triangle(triangle)
+    normal = greens_triangle_integration.get_normal_from_triangle(triangle)
 
     # Loop over each observer point
     for i in range(npt):
@@ -646,7 +488,7 @@ def greens_numeric_integration_h_n_grad_G(evaluation_points, triangle):
     v2 = triangle[2] - triangle[0]
     # Triangle area scaling factor = ||v1 x v2||
     Jac = np.linalg.norm(np.cross(v1, v2))
-    normal = get_normal_from_triangle(triangle)
+    normal = greens_triangle_integration.get_normal_from_triangle(triangle)
 
 
     # -----------------------------------------------------
@@ -898,30 +740,6 @@ def create_analysis_plot(plot_curr, title, running_parameter, analytic_data, num
     plot_curr.text(0.98 , -0.13, f"Max abs error: {max_abs_error:.2e}", transform=plot_curr.transAxes, fontsize=fontsize, ha='right', bbox=props)
     plot_curr.text(0.5, 0.02, status, transform=plot_curr.transAxes, fontsize=fontsize, ha='center', va="bottom", bbox=props)
 
-# -----------------------------------------------------------------------------
-# Helper functions
-# -----------------------------------------------------------------------------
-
-def get_normal_from_triangle(V):
-    """
-    Computes the normal vector of a triangle defined by vertices V. This function is used to be consistent.
-    """
-    normal = np.cross(V[1] - V[0], V[2] - V[0])
-    if np.linalg.norm(normal) < 1e-14:
-        raise ValueError("The triangle is degenerate (vertices are collinear).")
-    return normalize(normal)
-    
-def normalize(v):
-    """ Return the unit (normalized) vector of v. """
-    v = np.asarray(v, dtype=float)
-    n = np.linalg.norm(v)
-    return v / n if n > 1e-14 else v
-
-def normalize_rows(matrix):
-    """ Normalize each row of the input matrix. """
-    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-    norms = np.where(norms > 1e-14, norms, 1)
-    return matrix / norms
 
 def open_clean_folder(name):
     """
