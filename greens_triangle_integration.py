@@ -46,6 +46,10 @@ def integrate(evaluation_points, triangle, values_of_interest):
     
     nr_evaluation_points = evaluation_points.shape[0]
     
+    # Check if the triangle is degenerate
+    if np.linalg.matrix_rank(triangle) < 3:
+        raise ValueError("The triangle is degenerate (vertices are collinear).")
+    
     # dictionary to store the results
     integration_results = {}
     
@@ -59,7 +63,7 @@ def integrate(evaluation_points, triangle, values_of_interest):
         triangle[0] - triangle[2],
         triangle[1] - triangle[0]
     ])
-    l1, l2, l3 = np.linalg.norm(unit_tangents, axis=1)
+    l0, l1, l2 = np.linalg.norm(unit_tangents, axis=1)
     unit_tangents = normalize_rows(unit_tangents)
 
     # normal and edge normals
@@ -76,19 +80,20 @@ def integrate(evaluation_points, triangle, values_of_interest):
     w_unit = normal
 
     # evaluation points coordinates in triangle frame
-    u0 = np.dot( evaluation_points, u_unit )
-    v0 = np.dot( evaluation_points, v_unit )
-    w0 = np.dot( evaluation_points, w_unit )
+    u_eval = np.dot( evaluation_points, u_unit )
+    v_eval = np.dot( evaluation_points, v_unit )
+    w_eval = np.dot( evaluation_points, w_unit )
     
     # parametrization of linear map
-    u3 = np.dot( triangle[2] , u_unit )
-    v3 = np.dot( triangle[2] , v_unit )
+    u2 = np.dot( triangle[2] , u_unit )
+    v2 = np.dot( triangle[2] , v_unit )
     form = np.array([
-        [1, -1/l3, ( (u3 / l3) - 1 )/v3],
-        [0,  1/l3, -u3 / ( l3*v3 )],
-        [0,  0,  1]
+        [1, -1/l2, ( (u2 / l2) - 1 )/v2],
+        [0,  1/l2, -u2 / ( l2*v2 )],
+        [0,  0,  1/v2]
     ])
-    h1, h2, h3 = form @ [np.ones_like(u0), u0, v0]
+    h1, h2, h3 = form @ [np.ones_like(u_eval), u_eval, v_eval]
+    h_eval = form @ np.stack([np.ones_like(u_eval), u_eval, v_eval], axis=0)
     
     # Project observation points to the plane of the triangel
     P_plane = evaluation_points - np.dot( evaluation_points, w_unit )[:, np.newaxis] * w_unit
@@ -114,11 +119,11 @@ def integrate(evaluation_points, triangle, values_of_interest):
     Rminus = np.linalg.norm(evaluation_points[:, np.newaxis, :] - triangle[np.array([1, 2, 0])], axis=2)
     
     # apply in plane treshhold 
-    threshhold = accuracy_treshold * min([l1, l2, l3])
+    threshhold = accuracy_treshold * min([l0, l1, l2])
     timer_start[np.abs(timer_start) < threshhold] = 0.0
-    w0[np.abs(w0) < threshhold] = 0.0
+    w_eval[np.abs(w_eval) < threshhold] = 0.0
     R0[np.abs(R0) < threshhold] = 0.0
-    w0_tile = np.tile(w0, (3,1)).T
+    w0_tile = np.tile(w_eval, (3,1)).T
 
     # side functions
     with np.errstate(divide='ignore', invalid='ignore'):
@@ -139,8 +144,8 @@ def integrate(evaluation_points, triangle, values_of_interest):
     
     # eq. (19): integral of 1/r
     if 'G' in values_of_interest or 'h_G' in values_of_interest:
-        G = np.sum(timer_start*f2 , axis=1) - np.abs(w0)*beta
-        integration_results['G'] = G
+        Int_G = np.sum(timer_start*f2 , axis=1) - np.abs(w_eval)*beta
+        integration_results['G'] = Int_G
 
     # eq. (20): integral of u or v times (1/r)
     if 'h_G' in values_of_interest:
@@ -149,26 +154,26 @@ def integrate(evaluation_points, triangle, values_of_interest):
         Iva = np.dot( sum_vector , v_unit  )
 
         # eq. (24): integral of linear map times (1/r)
-        Iu = u0 * G + Iua
-        Iv = v0 * G + Iva 
+        Iu = u_eval * Int_G + Iua
+        Iv = v_eval * Int_G + Iva 
+        
         # compute for the 3 linear basis functions on the triangle
-        h_G0, h_G1, h_G2 = form @ [G, Iu, Iv]
-        integration_results['h_G'] = np.stack((h_G0, h_G1, h_G2), axis=-1)
+        Int_h_G = ( form @ [Int_G, Iu, Iv] ).T
+        integration_results['h_G'] = Int_h_G
             
     ### Integral of the gradient of the Green's function G
     
     # eq. (34): integral of grad(1/r)
     if 'grad_G' in values_of_interest or 'h_grad_G' in values_of_interest:
-        grad_G = - f2 @ edge_normals - np.sign(w0)[:, np.newaxis] * beta[:, np.newaxis] * w_unit
-        integration_results['grad_G'] = grad_G
+        Int_grad_G = - f2 @ edge_normals - np.sign(w_eval)[:, np.newaxis] * beta[:, np.newaxis] * w_unit
+        integration_results['grad_G'] = Int_grad_G
     
-
     # eq. (36): integrals of u or v times grad(1/r)
     if 'h_grad_G' in values_of_interest:
-        part1u = (w0 * np.dot((f2 @ edge_normals), u_unit))[:, None] * w_unit
-        part1v = (w0 * np.dot((f2 @ edge_normals), v_unit))[:, None] * w_unit
-        part2u = (-np.abs(w0) * beta)[:, None] * u_unit
-        part2v = (-np.abs(w0) * beta)[:, None] * v_unit
+        part1u = (w_eval * np.dot((f2 @ edge_normals), u_unit))[:, None] * w_unit
+        part1v = (w_eval * np.dot((f2 @ edge_normals), v_unit))[:, None] * w_unit
+        part2u = (-np.abs(w_eval) * beta)[:, None] * u_unit
+        part2v = (-np.abs(w_eval) * beta)[:, None] * v_unit
         u_dot_s = np.sum(u_unit * unit_tangents, axis=1)
         v_dot_s = np.sum(v_unit * unit_tangents, axis=1)
         f = ( (f2 * timer_start)[:, :, None] * unit_tangents[None, :, :]) - ((Rplus - Rminus)[:, :, None] * edge_normals[None, :, :])
@@ -178,27 +183,27 @@ def integrate(evaluation_points, triangle, values_of_interest):
         Igradva = part1v + part2v + part3v
         
         # eq. (40): integral of linear map times grad(1/r)
-        grad_G_u = u0[:,np.newaxis] * grad_G + Igradua
-        grad_G_v = v0[:,np.newaxis] * grad_G + Igradva
+        grad_G_u = u_eval[:,np.newaxis] * Int_grad_G + Igradua
+        grad_G_v = v_eval[:,np.newaxis] * Int_grad_G + Igradva
+        
         # compute for the 3 linear basis functions on the triangle
-        h_grad_G0, h_grad_G1, h_grad_G2 = np.tensordot(form, [grad_G, grad_G_u, grad_G_v], axes=1)
-        integration_results['h_grad_G'] = np.stack((h_grad_G0, h_grad_G1, h_grad_G2), axis=-1)
+        Int_h_grad_G = np.tensordot(form, [Int_grad_G, grad_G_u, grad_G_v], axes=1).transpose(1, 2, 0)
+        integration_results['h_grad_G'] = Int_h_grad_G
 
     ### Integral of the normal gradient of the Green's function G
 
     # eq. (34): integral of <n , grad(1/r) >
     if 'n_grad_G' in values_of_interest:
-        n_grad_G = -np.sign(w0) * beta
-        integration_results['n_grad_G'] = n_grad_G
+        Int_n_grad_G = -np.sign(w_eval) * beta
+        integration_results['n_grad_G'] = Int_n_grad_G
     
     # eq. (40): integrals of linear map times <n , grad(1/r) >
     if 'h_n_grad_G' in values_of_interest:
-        h_n_grad_G0, h_n_grad_G1, h_n_grad_G2 = np.tensordot(form, [
-            (-np.sign(w0) * beta * h1),
-            (w0 * np.dot(f2 @ edge_normals, u_unit)),
-            (w0 * np.dot(f2 @ edge_normals, v_unit))
-        ], axes=1)
-        integration_results['h_n_grad_G'] = np.stack((h_n_grad_G0, h_n_grad_G1, h_n_grad_G2), axis=-1)
+        Int_h_n_grad_G = ( np.tensordot(form[:, 1:], [
+            (w_eval * np.dot(f2 @ edge_normals, u_unit)),
+            (w_eval * np.dot(f2 @ edge_normals, v_unit))
+        ], axes=1) -np.sign(w_eval) * beta * h_eval ).T
+        integration_results['h_n_grad_G'] = Int_h_n_grad_G
 
     # final return
     return integration_results

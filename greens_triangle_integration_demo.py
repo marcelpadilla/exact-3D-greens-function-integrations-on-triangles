@@ -211,14 +211,12 @@ def greens_numeric_integration_G(evaluation_points, triangle):
     Jac = np.linalg.norm(np.cross(v1, v2))
 
     for i in range(npt):
-        qx, qy, qz = evaluation_points[i]
+        q = evaluation_points[i]
 
         def integrand_1overr(v, u):
-            Y = triangle[0] + u*v1 + v*v2
-            dx = qx - Y[0]
-            dy = qy - Y[1]
-            dz = qz - Y[2]
-            r = np.sqrt(dx*dx + dy*dy + dz*dz)
+            Y = triangle[0] + u * v1 + v * v2
+            r_vec = q - Y
+            r = np.linalg.norm(r_vec)
             return Jac / r
 
         with warnings.catch_warnings():
@@ -238,27 +236,25 @@ def greens_numeric_integration_h_G(evaluation_points, triangle):
     Numerically integrates h ⋅ 1/|y - x| over the triangle spanned by 
     triangle[0], triangle[1], triangle[2].
     """
+    # for testing h0, h1, h2. h0 is default
+    # triangle = triangle[[1, 2, 0]] # h1
+    # triangle = triangle[[2, 0, 1]] # h2
 
     npt = evaluation_points.shape[0]
     I_lin = np.zeros(npt)
-
+    
     # Edges as before
     v1 = triangle[1] - triangle[0]
     v2 = triangle[2] - triangle[0]
     Jac = np.linalg.norm(np.cross(v1, v2))
 
     for i in range(npt):
-        qx, qy, qz = evaluation_points[i]
+        q = evaluation_points[i]
 
-        # The integrand now includes (1 - u - v)
         def integrand_1overr(v, u):
-            # Param for the triangle
-            Y = triangle[0] + u*v1 + v*v2
-            dx = qx - Y[0]
-            dy = qy - Y[1]
-            dz = qz - Y[2]
-            r = np.sqrt(dx*dx + dy*dy + dz*dz)
-
+            Y = triangle[0] + u * v1 + v * v2
+            r_vec = q - Y
+            r = np.linalg.norm(r_vec)
             shape0 = 1.0 - u - v  # the shape function for node 0
             return (Jac * shape0) / r
 
@@ -292,58 +288,39 @@ def greens_numeric_integration_grad_G(evaluation_points, triangle):
     
     # Loop over each observer point
     for i in range(npt):
-        qx, qy, qz = evaluation_points[i]
+        q = evaluation_points[i]
 
-        def integrand_gradx(v, u):
-            Y = triangle[0] + u*v1 + v*v2
-            dx = qx - Y[0]
-            dy = qy - Y[1]
-            dz = qz - Y[2]
-            r = np.sqrt(dx*dx + dy*dy + dz*dz)
-            return -(dx / r**3) * Jac 
+        def integrand_grad(v, u):
+            Y = triangle[0] + u * v1 + v * v2
+            r_vec = q - Y
+            r = np.linalg.norm(r_vec)
+            return -(r_vec / r**3) * Jac 
 
-        def integrand_grady(v, u):
-            Y = triangle[0] + u*v1 + v*v2
-            dx = qx - Y[0]
-            dy = qy - Y[1]
-            dz = qz - Y[2]
-            r = np.sqrt(dx*dx + dy*dy + dz*dz)
-            return -(dy / r**3) * Jac
-
-        def integrand_gradz(v, u):
-            Y = triangle[0] + u*v1 + v*v2
-            dx = qx - Y[0]
-            dy = qy - Y[1]
-            dz = qz - Y[2]
-            r = np.sqrt(dx*dx + dy*dy + dz*dz)
-            return -(dz / r**3) * Jac
-
-        # Now do 3 separate dblquad calls
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            val, _ = dblquad(
+                lambda v, u: integrand_grad(v, u)[0],
+                0.0, 1.0,
+                lambda u: 0.0,
+                lambda u: 1.0 - u
+            )
+            I_grad[i, 0] = val
 
-            valx, _ = dblquad(
-                integrand_gradx,
+            val, _ = dblquad(
+                lambda v, u: integrand_grad(v, u)[1],
                 0.0, 1.0,
                 lambda u: 0.0,
                 lambda u: 1.0 - u
             )
-            valy, _ = dblquad(
-                integrand_grady,
-                0.0, 1.0,
-                lambda u: 0.0,
-                lambda u: 1.0 - u
-            )
-            valz, _ = dblquad(
-                integrand_gradz,
-                0.0, 1.0,
-                lambda u: 0.0,
-                lambda u: 1.0 - u
-            )
+            I_grad[i, 1] = val
 
-        I_grad[i, 0] = valx
-        I_grad[i, 1] = valy
-        I_grad[i, 2] = valz
+            val, _ = dblquad(
+                lambda v, u: integrand_grad(v, u)[2],
+                0.0, 1.0,
+                lambda u: 0.0,
+                lambda u: 1.0 - u
+            )
+            I_grad[i, 2] = val
 
     return I_grad
 
@@ -354,9 +331,13 @@ def greens_numeric_integration_h_grad_G(evaluation_points, triangle):
     """
     npt = evaluation_points.shape[0]
 
+    # for testing h0, h1, h2. h0 is default
+    # triangle = triangle[[1, 2, 0]] # h1
+    # triangle = triangle[[2, 0, 1]] # h2
+
     # Prepare the output array for the 3 components
     I_grad = np.zeros((npt, 3))
-
+    
     # Precompute vectors for parameterization
     v1 = triangle[1] - triangle[0]
     v2 = triangle[2] - triangle[0]
@@ -364,70 +345,44 @@ def greens_numeric_integration_h_grad_G(evaluation_points, triangle):
     Jac = np.linalg.norm(np.cross(v1, v2))
 
     for i in range(npt):
-        qx, qy, qz = evaluation_points[i]
+        q = evaluation_points[i]
 
-        def integrand_gradx(v, u):
-            Y = triangle[0] + u*v1 + v*v2
-            dx = qx - Y[0]
-            dy = qy - Y[1]
-            dz = qz - Y[2]
-            # small regularization to avoid r=0 blowups
-            r = np.sqrt(dx*dx + dy*dy + dz*dz)
-
-            # shape function for node V[0]
+        def integrand_grad(v, u):
+            Y = triangle[0] + u * v1 + v * v2
+            r_vec = q - Y
+            r = np.linalg.norm(r_vec)
             shape0 = 1.0 - u - v
-            # combine with -(dx/r^3), plus the area factor
-            return shape0 * (-(dx / r**3)) * Jac
-
-        def integrand_grady(v, u):
-            Y = triangle[0] + u*v1 + v*v2
-            dx = qx - Y[0]
-            dy = qy - Y[1]
-            dz = qz - Y[2]
-            r = np.sqrt(dx*dx + dy*dy + dz*dz)
-
-            shape0 = 1.0 - u - v
-            return shape0 * (-(dy / r**3)) * Jac
-
-        def integrand_gradz(v, u):
-            Y = triangle[0] + u*v1 + v*v2
-            dx = qx - Y[0]
-            dy = qy - Y[1]
-            dz = qz - Y[2]
-            r = np.sqrt(dx*dx + dy*dy + dz*dz)
-
-            shape0 = 1.0 - u - v
-            return shape0 * (-(dz / r**3)) * Jac
+            return shape0 * (-(r_vec / r**3)) * Jac
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            val, _ = dblquad(
+                lambda v, u: integrand_grad(v, u)[0],
+                0.0, 1.0,
+                lambda u: 0.0,
+                lambda u: 1.0 - u
+            )
+            I_grad[i, 0] = val
 
-            valx, _ = dblquad(
-                integrand_gradx,
+            val, _ = dblquad(
+                lambda v, u: integrand_grad(v, u)[1],
                 0.0, 1.0,
                 lambda u: 0.0,
                 lambda u: 1.0 - u
             )
-            valy, _ = dblquad(
-                integrand_grady,
-                0.0, 1.0,
-                lambda u: 0.0,
-                lambda u: 1.0 - u
-            )
-            valz, _ = dblquad(
-                integrand_gradz,
-                0.0, 1.0,
-                lambda u: 0.0,
-                lambda u: 1.0 - u
-            )
+            I_grad[i, 1] = val
 
-        I_grad[i, 0] = valx
-        I_grad[i, 1] = valy
-        I_grad[i, 2] = valz
+            val, _ = dblquad(
+                lambda v, u: integrand_grad(v, u)[2],
+                0.0, 1.0,
+                lambda u: 0.0,
+                lambda u: 1.0 - u
+            )
+            I_grad[i, 2] = val
 
     return I_grad
 
-def greens_numeric_integration_n_grad_G(evaluation_points,triangle):
+def greens_numeric_integration_n_grad_G(evaluation_points, triangle):
     """
     Numerically integrates < n , ∇( 1/|y - x| ) > over the triangle spanned by 
     triangle[0], triangle[1], triangle[2].
@@ -449,15 +404,13 @@ def greens_numeric_integration_n_grad_G(evaluation_points,triangle):
 
     # Loop over each observer point
     for i in range(npt):
-        qx, qy, qz = evaluation_points[i]
+        q = evaluation_points[i]
 
         def integrand(v, u):
             Y = triangle[0] + u * v1 + v * v2
-            dx = qx - Y[0]
-            dy = qy - Y[1]
-            dz = qz - Y[2]
-            r = np.sqrt(dx * dx + dy * dy + dz * dz)
-            grad = np.array([dx, dy, dz]) / r**3
+            r_vec = q - Y
+            r = np.linalg.norm(r_vec)
+            grad = r_vec / r**3
             return -np.dot(normal, grad) * Jac
 
         with warnings.catch_warnings():
@@ -477,13 +430,17 @@ def greens_numeric_integration_h_n_grad_G(evaluation_points, triangle):
     Numerically integrates h ⋅ < n , ∇( 1/|y - x| ) > over the triangle spanned by 
     triangle[0], triangle[1], triangle[2].
     """
-
+    # for testing h0, h1, h2. h0 is default
+    # triangle = triangle[[1, 2, 0]] # h1
+    # triangle = triangle[[2, 0, 1]] # h2
+    
     npt = evaluation_points.shape[0]
     I_grad_dot_n = np.zeros(npt)
 
     # -----------------------------------------------------
     # 1) Parameterization / geometry setup
     # -----------------------------------------------------
+
     v1 = triangle[1] - triangle[0]
     v2 = triangle[2] - triangle[0]
     # Triangle area scaling factor = ||v1 x v2||
@@ -495,21 +452,14 @@ def greens_numeric_integration_h_n_grad_G(evaluation_points, triangle):
     # 2) Integration loop over each observer point
     # -----------------------------------------------------
     for i in range(npt):
-        qx, qy, qz = evaluation_points[i]
+        q = evaluation_points[i]
 
         def integrand_1overr_dot_n(v, u):
-            # Parametric point Y(u,v) in the triangle
-            Y = triangle[0] + u*v1 + v*v2
-            dx = qx - Y[0]
-            dy = qy - Y[1]
-            dz = qz - Y[2]
-            r = np.sqrt(dx*dx + dy*dy + dz*dz)
-            grad_dot_n = -(dx*normal[0] + dy*normal[1] + dz*normal[2]) / (r**3)
-
-            # shape function for node V[0] => (1 - u - v)
-            shape0 = 1.0 - u - v
-
-            # Multiply by area factor
+            Y = triangle[0] + u * v1 + v * v2
+            r_vec = q - Y
+            r = np.linalg.norm(r_vec)
+            grad_dot_n = -np.dot(r_vec, normal) / (r**3)
+            shape0 = 1 - u - v
             return grad_dot_n * shape0 * Jac
 
         with warnings.catch_warnings():
