@@ -533,17 +533,22 @@ def greens_numeric_integration_h_n_grad_G(evaluation_points, triangle):
 def analyze_results(results_analytical, results_numerical, evaluation_line, triangle, running_parameter, evaluation_case):
     
     # read
-    I, I_linear, I_grad, I_grad_linear, I_n_grad, I_n_grad_linear, time_analytical = results_analytical
-    I_num, I_num_linear, I_num_grad, I_num_grad_linear, I_num_n_grad, I_num_n_grad_linear, time_numerical = results_numerical
+    Int_G, Int_h_G, Int_grad_G, Int_h_grad_G, Int_n_grad_G, Int_h_n_grad_G, time_analytical = results_analytical
+    Int_num_G, Int_num_h_G, Int_num_grad_G, I_num_h_grad_G, Int_num_n_grad_G, Int_num_h_n_grad_G, time_numerical = results_numerical
+    
+    # read only the h0 linear function component of the results with the 3 components
+    Int_h_G = Int_h_G[:, 0]
+    Int_h_grad_G = Int_h_grad_G[:, : , 0]
+    Int_h_n_grad_G = Int_h_n_grad_G[:, 0]
     
     # error measures
     error_threshhold = accuracy_treshold*np.min([np.linalg.norm(triangle[i] - triangle[(i+1) % 3]) for i in range(3)])
-    max_abs_error_I = np.max(np.abs(I - I_num))
-    max_abs_error_I_linear = np.max(np.abs(I_linear - I_num_linear))
-    max_abs_error_I_grad = np.max(np.abs(I_grad - I_num_grad))
-    max_abs_error_I_grad_linear = np.max(np.abs(I_grad_linear - I_num_grad_linear))
-    max_abs_error_I_n_grad = np.max(np.abs(I_n_grad - I_num_n_grad))
-    max_abs_error_I_n_grad_linear = np.max(np.abs(I_n_grad_linear - I_num_n_grad_linear))
+    max_abs_error_Int_G = np.max(np.abs(Int_G - Int_num_G))
+    max_abs_error_Int_h_G = np.max(np.abs(Int_h_G - Int_num_h_G))
+    max_abs_error_Int_grad_G = np.max(np.abs(Int_grad_G - Int_num_grad_G))
+    max_abs_error_Int_h_grad_G = np.max(np.abs(Int_h_grad_G - I_num_h_grad_G))
+    max_abs_error_Int_n_grad_G = np.max(np.abs(Int_n_grad_G - Int_num_n_grad_G))
+    max_abs_error_Int_h_n_grad_G = np.max(np.abs(Int_h_n_grad_G - Int_num_h_n_grad_G))
     
     # plot setup
     fontsize = 8 
@@ -639,12 +644,12 @@ def analyze_results(results_analytical, results_numerical, evaluation_line, tria
         )
 
     # create all plots
-    create_analysis_plot(axs[0, 1], r"$\int_T \ G(x,y) dA_y = \int_T \ \frac{1}{|y-x|} dA_y$", running_parameter, I, I_num, max_abs_error_I, error_threshhold, fontsize)
-    create_analysis_plot(axs[1, 1], r"$\int_T \ h(x) \ G(x,y) dA_y = \int_T \ h(x) \ \frac{1}{|y-x|} dA_y$", running_parameter, I_linear, I_num_linear, max_abs_error_I_linear, error_threshhold, fontsize)
-    create_analysis_plot(axs[0, 2], r"$\int_T \ \partial_{n_y} G(x,y) dA_y = \int_T \ \langle n_y , \nabla \frac{1}{|y-x|} \rangle dA_y$", running_parameter, I_n_grad, I_num_n_grad, max_abs_error_I_n_grad, error_threshhold, fontsize)
-    create_analysis_plot(axs[1, 2], r"$\int_T \ h(x) \ \partial_{n_y} G(x,y) dA_y = \int_T \ h(x) \ \langle n_y , \nabla \frac{1}{|y-x|} \rangle dA_y$", running_parameter, I_n_grad_linear, I_num_n_grad_linear, max_abs_error_I_n_grad_linear, error_threshhold, fontsize)
-    create_analysis_plot(axs[0, 3], r"$\int_T \ \nabla G(x,y) dA_y = \int_T \ \nabla \frac{1}{|y-x|} dA_y$", running_parameter, I_grad, I_num_grad, max_abs_error_I_grad, error_threshhold, fontsize)
-    create_analysis_plot(axs[1, 3], r"$\int_T \ h(x) \ \nabla G(x,y) dA_y = \int_T \ h(x) \ \nabla \frac{1}{|y-x|} dA_y$", running_parameter, I_grad_linear, I_num_grad_linear, max_abs_error_I_grad_linear, error_threshhold, fontsize)
+    create_analysis_plot(axs[0, 1], r"$\int_T \ G(x,y) dA_y = \int_T \ \frac{1}{|y-x|} dA_y$", running_parameter, Int_G, Int_num_G, max_abs_error_Int_G, error_threshhold, fontsize)
+    create_analysis_plot(axs[1, 1], r"$\int_T \ h(x) \ G(x,y) dA_y = \int_T \ h(x) \ \frac{1}{|y-x|} dA_y$", running_parameter, Int_h_G, Int_num_h_G, max_abs_error_Int_h_G, error_threshhold, fontsize)
+    create_analysis_plot(axs[0, 2], r"$\int_T \ \partial_{n_y} G(x,y) dA_y = \int_T \ \langle n_y , \nabla \frac{1}{|y-x|} \rangle dA_y$", running_parameter, Int_n_grad_G, Int_num_n_grad_G, max_abs_error_Int_n_grad_G, error_threshhold, fontsize)
+    create_analysis_plot(axs[1, 2], r"$\int_T \ h(x) \ \partial_{n_y} G(x,y) dA_y = \int_T \ h(x) \ \langle n_y , \nabla \frac{1}{|y-x|} \rangle dA_y$", running_parameter, Int_h_n_grad_G, Int_num_h_n_grad_G, max_abs_error_Int_h_n_grad_G, error_threshhold, fontsize)
+    create_analysis_plot(axs[0, 3], r"$\int_T \ \nabla G(x,y) dA_y = \int_T \ \nabla \frac{1}{|y-x|} dA_y$", running_parameter, Int_grad_G, Int_num_grad_G, max_abs_error_Int_grad_G, error_threshhold, fontsize)
+    create_analysis_plot(axs[1, 3], r"$\int_T \ h(x) \ \nabla G(x,y) dA_y = \int_T \ h(x) \ \nabla \frac{1}{|y-x|} dA_y$", running_parameter, Int_h_grad_G, I_num_h_grad_G, max_abs_error_Int_h_grad_G, error_threshhold, fontsize)
     
     # Plot the triangle
     plot_3d_view = axs[1, 0]

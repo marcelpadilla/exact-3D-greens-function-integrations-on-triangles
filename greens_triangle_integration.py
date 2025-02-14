@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import numpy as np
 
-
 # -----------------------------------------------------------------------------
 ### Settings ###
 accuracy_treshold = 1e-6
@@ -33,7 +32,8 @@ def integrate(evaluation_points, triangle, values_of_interest):
             - 'h_n_grad_G' : the integral of h ⋅ <n, ∇(1/r)>
             - 'grad_G' : the integral of ∇(1/r)
             - 'h_grad_G' : the integral of h ⋅ ∇(1/r)
-            - additionally, 'h_G1','h_G2','h_G3','h_grad_G1','h_grad_G2','h_grad_G3','h_n_grad_G1','h_n_grad_G2','h_n_grad_G3' can be used to get the integrals of the linear functions on the triangle times the corresponding integrals with linear functions that reach the value 1 only at ith triangle vertex. Without specification i=1.
+            - when using h, an array of dimension (nr_evaluation_points, 3) is returned, where the columns are the integrals with h0, h1 and h2, respectively. h0(trianlge[0])=1, h0(trianlge[1])=h0(trianlge[2])=0, and so on.
+            - Use integration_results['h_G'][:,0] and integration_results['h_grad_G'][:,:,0] to access all h0 integrations.
     Output:
         - The analytic integral values on the evaluation points, in form of numpy arrays, stored in a dictionary that can be accessed by the strings mentioned in the input.
 
@@ -137,12 +137,12 @@ def integrate(evaluation_points, triangle, values_of_interest):
     ### Basic integral of Green's function G
     
     # eq. (19): integral of 1/r
-    if 'G' in values_of_interest:
+    if 'G' in values_of_interest or 'h_G' in values_of_interest:
         G = np.sum(timer_start*f2 , axis=1) - np.abs(w0)*beta
         integration_results['G'] = G
 
     # eq. (20): integral of u or v times (1/r)
-    if 'h_G' in values_of_interest or 'h_G1' in values_of_interest or 'h_G2' in values_of_interest or 'h_G3' in values_of_interest:
+    if 'h_G' in values_of_interest:
         sum_vector = 0.5 * f3 @ edge_normals
         Iua = np.dot( sum_vector , u_unit  )
         Iva = np.dot( sum_vector , v_unit  )
@@ -151,28 +151,19 @@ def integrate(evaluation_points, triangle, values_of_interest):
         Iu = u0 * G + Iua
         Iv = v0 * G + Iva 
         # compute for the 3 linear basis functions on the triangle
-        h_G1, h_G2, h_G3 = form @ [G, Iu, Iv]
-        
-        # store the results
-        if( 'h_G' in values_of_interest):
-            integration_results['h_G'] = h_G1
-        if( 'h_G1' in values_of_interest):
-            integration_results['h_G1'] = h_G1
-        if( 'h_G2' in values_of_interest):
-            integration_results['h_G2'] = h_G2
-        if( 'h_G3' in values_of_interest):
-            integration_results['h_G3'] = h_G3
-    
+        h_G0, h_G1, h_G2 = form @ [G, Iu, Iv]
+        integration_results['h_G'] = np.stack((h_G0, h_G1, h_G2), axis=-1)
+            
     ### Integral of the gradient of the Green's function G
     
     # eq. (34): integral of grad(1/r)
-    if 'grad_G' in values_of_interest:
+    if 'grad_G' in values_of_interest or 'h_grad_G' in values_of_interest:
         grad_G = - f2 @ edge_normals - np.sign(w0)[:, np.newaxis] * beta[:, np.newaxis] * w_unit
         integration_results['grad_G'] = grad_G
     
 
     # eq. (36): integrals of u or v times grad(1/r)
-    if 'h_grad_G' in values_of_interest or 'h_grad_G1' in values_of_interest or 'h_grad_G2' in values_of_interest or 'h_grad_G3' in values_of_interest:
+    if 'h_grad_G' in values_of_interest:
         part1u = (w0 * np.dot((f2 @ edge_normals), u_unit))[:, None] * w_unit
         part1v = (w0 * np.dot((f2 @ edge_normals), v_unit))[:, None] * w_unit
         part2u = (-np.abs(w0) * beta)[:, None] * u_unit
@@ -189,17 +180,11 @@ def integrate(evaluation_points, triangle, values_of_interest):
         grad_G_u = u0[:,np.newaxis] * grad_G + Igradua
         grad_G_v = v0[:,np.newaxis] * grad_G + Igradva
         # compute for the 3 linear basis functions on the triangle
-        h_grad_G1, h_grad_G2, h_grad_G3 = np.tensordot(form, [grad_G, grad_G_u, grad_G_v], axes=1)
-        
-        # store the results
-        if( 'h_grad_G' in values_of_interest):
-            integration_results['h_grad_G'] = h_grad_G1
-        if( 'h_grad_G1' in values_of_interest):
-            integration_results['h_grad_G1'] = h_grad_G1
-        if( 'h_grad_G2' in values_of_interest):
-            integration_results['h_grad_G2'] = h_grad_G2
-        if( 'h_grad_G3' in values_of_interest):
-            integration_results['h_grad_G3'] = h_grad_G3
+        h_grad_G0, h_grad_G1, h_grad_G2 = np.tensordot(form, [grad_G, grad_G_u, grad_G_v], axes=1)
+        print("h_grad_G0.shape", h_grad_G0.shape)
+        a = np.stack((h_grad_G0, h_grad_G1, h_grad_G2), axis=-1)
+        # print("a.shape", a.shape)
+        integration_results['h_grad_G'] = a
 
     ### Integral of the normal gradient of the Green's function G
 
@@ -209,20 +194,13 @@ def integrate(evaluation_points, triangle, values_of_interest):
         integration_results['n_grad_G'] = n_grad_G
     
     # eq. (40): integrals of linear map times <n , grad(1/r) >
-    if 'h_n_grad_G' in values_of_interest or 'h_n_grad_G1' in values_of_interest or 'h_n_grad_G2' in values_of_interest or 'h_n_grad_G3' in values_of_interest:
-        h_n_grad_G1, h_n_grad_G2, h_n_grad_G3 = np.tensordot(form, [
+    if 'h_n_grad_G' in values_of_interest:
+        h_n_grad_G0, h_n_grad_G1, h_n_grad_G2 = np.tensordot(form, [
             (-np.sign(w0) * beta * h1),
             (w0 * np.dot(f2 @ edge_normals, u_unit)),
             (w0 * np.dot(f2 @ edge_normals, v_unit))
         ], axes=1)
-        if 'h_n_grad_G' in values_of_interest:
-            integration_results['h_n_grad_G'] = h_n_grad_G1
-        if 'h_n_grad_G1' in values_of_interest:
-            integration_results['h_n_grad_G1'] = h_n_grad_G1
-        if 'h_n_grad_G2' in values_of_interest:
-            integration_results['h_n_grad_G2'] = h_n_grad_G2
-        if 'h_n_grad_G3' in values_of_interest:
-            integration_results['h_n_grad_G3'] = h_n_grad_G3
+        integration_results['h_n_grad_G'] = np.stack((h_n_grad_G0, h_n_grad_G1, h_n_grad_G2), axis=-1)
 
     # final return
     return integration_results

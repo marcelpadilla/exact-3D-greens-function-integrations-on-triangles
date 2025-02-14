@@ -70,7 +70,7 @@ greens_triangle_integration.integrate(
             | 'h_n_grad_G'      | $\int_T \ h(x) \ \partial_{n_y} G(x,y) dA_y$ |
             | 'grad_G'          | $\int_T \ \nabla G(x,y) dA_y$ |
             | 'h_grad_G'        | $\int_T \ h(x) \ \nabla G(x,y) dA_y$ |
-        - Additionally, 'h_G1', 'h_G2', 'h_G3', 'h_grad_G1', 'h_grad_G2', 'h_grad_G3', 'h_n_grad_G1', 'h_n_grad_G2', 'h_n_grad_G3' can be used to get the integrals of the linear functions on the triangle times the corresponding integrals with linear functions that reach the value 1 only at the $i$-th triangle vertex. Without specification, i=1.
+        - any call involving $h$, returns a numpy array of dimensions (nr_evaluation_points,3) with the $i$-th column being the integral with the linear function $hi$, where $hi$ is the linear function that reaches the value 1 on the $i$-th triangle vertex and 0 on the other vertices.
 - **Output:**
     - integration_results
         - The analytic integral values on the evaluation points, in the form of numpy arrays, stored in a dictionary that can be accessed by the strings mentioned in the input.
