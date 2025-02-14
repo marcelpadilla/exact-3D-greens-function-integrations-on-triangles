@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 
+
 # -----------------------------------------------------------------------------
 ### Settings ###
 accuracy_treshold = 1e-6
@@ -181,10 +182,7 @@ def integrate(evaluation_points, triangle, values_of_interest):
         grad_G_v = v0[:,np.newaxis] * grad_G + Igradva
         # compute for the 3 linear basis functions on the triangle
         h_grad_G0, h_grad_G1, h_grad_G2 = np.tensordot(form, [grad_G, grad_G_u, grad_G_v], axes=1)
-        print("h_grad_G0.shape", h_grad_G0.shape)
-        a = np.stack((h_grad_G0, h_grad_G1, h_grad_G2), axis=-1)
-        # print("a.shape", a.shape)
-        integration_results['h_grad_G'] = a
+        integration_results['h_grad_G'] = np.stack((h_grad_G0, h_grad_G1, h_grad_G2), axis=-1)
 
     ### Integral of the normal gradient of the Green's function G
 
