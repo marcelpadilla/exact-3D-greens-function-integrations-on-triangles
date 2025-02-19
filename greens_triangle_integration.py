@@ -10,7 +10,7 @@ accuracy_treshold = 1e-6
 
 def integrate(evaluation_points, triangle, values_of_interest):
     """
-    We compute analytically the Green's and its gradient and product with linear functions on a triangle T in R3.
+    We compute analytically the integrals of the 3D Green's functions, its gradient and their product with linear functions on a triangle T in R3.
 
     Let x be an evaluation point, r(x,y) = |y-x| and Let h(x) be a linear function on the triangle with value 1 at the first triangle vertex and 0 on the other vertices.
 
@@ -21,7 +21,7 @@ def integrate(evaluation_points, triangle, values_of_interest):
     ∫ h ⋅ <n, ∇(1/r)>
     ∫ ∇(1/r)
     ∫ h ⋅ ∇(1/r)
-    over a single triangle T in R3. 
+    over a single triangle T in R3. Note that we are not dividing by 4pi.
 
     Input:
         - A set of evaluation points in R3, in form of a numpy array.
