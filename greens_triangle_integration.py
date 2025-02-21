@@ -46,10 +46,6 @@ def integrate(evaluation_points, triangle, values_of_interest):
     
     nr_evaluation_points = evaluation_points.shape[0]
     
-    # Check if the triangle is degenerate
-    if np.linalg.matrix_rank(triangle) < 3:
-        raise ValueError("The triangle is degenerate (vertices are collinear).")
-    
     # dictionary to store the results
     integration_results = {}
     
