@@ -95,16 +95,19 @@ def integrate(evaluation_points, triangle, values_of_interest):
     P_plane = evaluation_points - np.dot( evaluation_points, w_unit )[:, np.newaxis] * w_unit
     
     # Project observation points to the edges of the triangle
-    indices = np.array([1, 2, 0])  # Next vertex indices
-    diff = evaluation_points[:, np.newaxis, :] - triangle[indices]
-    projections = np.sum(diff * unit_tangents, axis=2)  # Shape: (N, 3), dot product for each vertex
-    P_edge = triangle[indices] + projections[:, :, np.newaxis] * unit_tangents
+    P_edge = np.zeros((nr_evaluation_points, 3, 3))
+    for i in range(3):
+        P_edge[:, i, :] = triangle[(i + 1) % 3] + unit_tangents[i] * np.dot(evaluation_points - triangle[(i + 1) % 3], unit_tangents[i])[:, np.newaxis]
     
 
     # parametrizations of integration
-    splus = np.sum((triangle[[2, 0, 1]] - P_edge) * unit_tangents, axis=2)
-    sminus = np.sum((triangle[[1, 2, 0]] - P_edge) * unit_tangents, axis=2)
-    timer_start = np.sum((P_edge - P_plane[:, np.newaxis, :]) * edge_normals, axis=2)
+    splus = np.zeros((nr_evaluation_points, 3))
+    sminus = np.zeros((nr_evaluation_points, 3))
+    timer_start = np.zeros((nr_evaluation_points, 3))
+    for i in range(3):
+        splus[:, i] = np.dot( triangle[(i + 2) % 3] - P_edge[:, i, :] , unit_tangents[i])
+        sminus[:, i] = np.dot( triangle[(i + 1) % 3] - P_edge[:, i, :] , unit_tangents[i])
+        timer_start[:, i] = np.dot( P_edge[:, i, :] - P_plane , edge_normals[i])
     
     # distances
     R0 = np.linalg.norm(evaluation_points[:, np.newaxis, :] - P_edge, axis=2)
